@@ -29,12 +29,10 @@ class UserComparatorWrapper final : public Comparator {
   const Comparator* user_comparator() const { return user_comparator_; }
 
   int Compare(const Slice& a, const Slice& b) const override {
-    PERF_COUNTER_ADD(user_key_comparison_count, 1);
     return user_comparator_->Compare(a, b);
   }
 
   bool Equal(const Slice& a, const Slice& b) const override {
-    PERF_COUNTER_ADD(user_key_comparison_count, 1);
     return user_comparator_->Equal(a, b);
   }
 
