@@ -1844,7 +1844,7 @@ TEST_F(CloudTest, NonEmptyCookieTest) {
   EXPECT_EQ(basename(cloud_manifest_file), "CLOUDMANIFEST-000001");
 }
 
-TEST_F(CloudTest, LiveFilesConsistentBetweenCloudManifestRollTest) {
+TEST_F(CloudTest, LiveFilesConsistentAfterApplyLocalCloudManifestDeltaTest) {
   // verify that live files are the same between CLOUD_MANIFEST-cookie1 and
   // CLOUD_MANIFEST-cookie2
   auto verifyLiveFiles = [cloud_env = GetCloudEnvImpl()](std::string cookie1,
@@ -1867,40 +1867,29 @@ TEST_F(CloudTest, LiveFilesConsistentBetweenCloudManifestRollTest) {
   ASSERT_OK(db_->Flush(FlushOptions()));
 
   std::string new_cookie = "2";
-  std::string serialized_delta;
-  ASSERT_OK(GetCloudEnvImpl()->RollCloudManifest(
-      dbname_, new_cookie, GetDBImpl()->TEST_Current_Next_FileNo(),
-      &serialized_delta));
-  Slice delta_slice(serialized_delta);
-  CloudManifestDelta delta;
-  ASSERT_OK(DeserializeCloudManifestDelta(&delta_slice, &delta));
-  EXPECT_EQ(delta.file_num, GetDBImpl()->TEST_Current_Next_FileNo());
+  std::string new_epoch = "dca7f3e19212c4b3"; // new epoch for MANIFEST file
+  ASSERT_OK(GetCloudEnvImpl()->ApplyLocalCloudManifestDelta(
+      dbname_, new_cookie, CloudManifestDelta{GetDBImpl()->TEST_Current_Next_FileNo(), new_epoch}));
+  // check that a new manifest files are generated
+  EXPECT_OK(base_env_->FileExists(MakeCloudManifestFile(dbname_, new_cookie)));
+  EXPECT_OK(base_env_->FileExists(ManifestFileWithEpoch(dbname_, new_epoch)));
+
   verifyLiveFiles("1" /* old cookie */, "2" /* new cookie */);
 }
 
-TEST_F(CloudTest, ApplyCloudManifestDeltaTest) {
-  cloud_env_options_.cookie_on_open = "1";
-  OpenDB();
-  ASSERT_OK(db_->Put(WriteOptions(), "Hello", "world"));
-  ASSERT_OK(db_->Flush(FlushOptions()));
-  auto max_next_file_num = GetDBImpl()->TEST_Current_Next_FileNo();
-  CloudManifestDelta delta{max_next_file_num, "dca7f3e19212c4b3" /* fake epoch */};
-  std::string serialized_delta;
-  ASSERT_OK(SerializeCloudManifestDelta(&serialized_delta, std::move(delta)));
-  ASSERT_OK(GetCloudEnvImpl()->ApplyCloudManifestDelta(std::move(serialized_delta)));
-}
-
-TEST_F(CloudTest, WriteAfterRollingArePersistedInNewEpoch) {
+// After calling `ApplyLocalCloudManifestDelta`, writes should be persisted in
+// sst files only visible in new Manifest
+TEST_F(CloudTest, WriteAfterUpdateCloudManifestArePersistedInNewEpoch) {
   cloud_env_options_.cookie_on_open = "1";
   OpenDB();
   ASSERT_OK(db_->Put(WriteOptions(), "Hello", "world"));
   ASSERT_OK(db_->Flush(FlushOptions()));
 
   std::string new_cookie = "2";
-  std::string serialized_delta;
-  ASSERT_OK(GetCloudEnvImpl()->RollCloudManifest(
-      dbname_, new_cookie, GetDBImpl()->TEST_Current_Next_FileNo(),
-      &serialized_delta));
+  std::string new_epoch = "dca7f3e19212c4b3";
+  ASSERT_OK(GetCloudEnvImpl()->ApplyLocalCloudManifestDelta(
+      dbname_, new_cookie,
+      CloudManifestDelta{GetDBImpl()->TEST_Current_Next_FileNo(), new_epoch}));
 
   // following writes are not visible after rolling cloud manifest
   ASSERT_OK(db_->Put(WriteOptions(), "Hello", "new_world"));
@@ -1914,6 +1903,28 @@ TEST_F(CloudTest, WriteAfterRollingArePersistedInNewEpoch) {
   std::string value;
   ASSERT_OK(db_->Get(ReadOptions(), "Hello", &value));
   ASSERT_EQ(value, "world");
+}
+
+TEST_F(CloudTest, UploadLocalCloudManifestTest) {
+  cloud_env_options_.cookie_on_open = "1";
+  OpenDB();
+  std::string new_cookie = "2";
+  std::string new_epoch = "dca7f3e19212c4b3";
+
+  // Generate new manifest files
+  ASSERT_OK(GetCloudEnvImpl()->ApplyLocalCloudManifestDelta(
+      dbname_, new_cookie,
+      CloudManifestDelta{GetDBImpl()->TEST_Current_Next_FileNo(), new_epoch}));
+
+  ASSERT_OK(GetCloudEnvImpl()->UploadLocalCloudManifest(dbname_, new_cookie));
+
+  // check that manifest files are uploaded successfully
+  for (auto file : {MakeCloudManifestFile(dbname_, new_cookie),
+                    ManifestFileWithEpoch(dbname_, new_epoch)}) {
+    EXPECT_TRUE(aenv_->GetStorageProvider()
+                    ->ExistsCloudObject(aenv_->GetSrcBucketName(), file)
+                    .ok());
+  }
 }
 
 }  //  namespace ROCKSDB_NAMESPACE
