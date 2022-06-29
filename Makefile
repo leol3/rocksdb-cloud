@@ -11,8 +11,8 @@ SHELL := $(shell which bash)
 include python.mk
 
 CLEAN_FILES = # deliberately empty, so we can append below.
-CFLAGS += ${EXTRA_CFLAGS}
-CXXFLAGS += ${EXTRA_CXXFLAGS}
+CFLAGS += ${EXTRA_CFLAGS} -DUSE_AWS -I/root/install/usr/local/include/ -Wno-overloaded-virtual -Wno-non-virtual-dtor -Wno-error=overloaded-virtual
+CXXFLAGS += ${EXTRA_CXXFLAGS} -DUSE_AWS -I/root/install/usr/local/include/ -Wno-overloaded-virtual -Wno-non-virtual-dtor -Wno-error=overloaded-virtual
 LDFLAGS += $(EXTRA_LDFLAGS)
 MACHINE ?= $(shell uname -m)
 ARFLAGS = ${EXTRA_ARFLAGS} rs
@@ -268,6 +268,8 @@ CFLAGS += -march=armv8-a+crc+crypto
 ARMCRC_SOURCE=1
 endif
 endif
+LIB_SOURCES += cloud/cloud_transaction.cc
+LIB_SOURCES += cloud/cloud_lock_mgr.cc
 
 export JAVAC_ARGS
 CLEAN_FILES += make_config.mk rocksdb.pc

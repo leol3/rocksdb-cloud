@@ -22,7 +22,6 @@
 #include "db/column_family.h"
 #include "db/compaction/compaction_iterator.h"
 #include "db/compaction/compaction_job.h"
-#include "db/db_impl/replication_codec.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
 #include "db/external_sst_file_ingestion_job.h"
@@ -87,7 +86,6 @@ class WriteCallback;
 struct JobContext;
 struct ExternalSstFileInfo;
 struct MemTableInfo;
-struct MemTableLogNumAndReplSeq;
 
 // Class to maintain directories for all database paths other than main one.
 class Directories {
@@ -333,7 +331,6 @@ class DBImpl : public DB {
 
   Status ApplyReplicationLogRecord(
       ReplicationLogRecord record,
-      std::string replication_sequence,
       ApplyReplicationLogRecordInfo* info) override;
   Status GetPersistedReplicationSequence(std::string* out) override;
 
@@ -1339,13 +1336,14 @@ class DBImpl : public DB {
   // batch_cnt is expected to be non-zero in seq_per_batch mode and
   // indicates the number of sub-patches. A sub-patch is a subset of the write
   // batch that does not have duplicate keys.
+ public:
   Status WriteImpl(const WriteOptions& options, WriteBatch* updates,
                    WriteCallback* callback = nullptr,
                    uint64_t* log_used = nullptr, uint64_t log_ref = 0,
                    bool disable_memtable = false, uint64_t* seq_used = nullptr,
                    size_t batch_cnt = 0,
                    PreReleaseCallback* pre_release_callback = nullptr);
-
+ protected:
   Status PipelinedWriteImpl(const WriteOptions& options, WriteBatch* updates,
                             WriteCallback* callback = nullptr,
                             uint64_t* log_used = nullptr, uint64_t log_ref = 0,
@@ -1429,6 +1427,7 @@ class DBImpl : public DB {
   friend class ErrorHandler;
   friend class InternalStats;
   friend class PessimisticTransaction;
+  friend class CloudTransaction;
   friend class TransactionBaseImpl;
   friend class WriteCommittedTxn;
   friend class WritePreparedTxn;
@@ -1720,23 +1719,8 @@ class DBImpl : public DB {
 
   Status TrimMemtableHistory(WriteContext* context);
 
-  // Switch memtable without creating new WAL. Also set the next_log_num and
-  // replication_sequence in switched memtable
-  //
-  // NOTE:
-  // - this function should only be used when WAL is disabled.
-  // - Unlike `SwitchMemtable`, the dbmutex will be held throughput the function
-  // call, unless there is listener on `OnMemTableSealed` event
-  //
-  // REQUIRES: mutex_ is held
-  // REQUIRES: this thread is currently at the front of the writer queue
-  // REQUIRES: this thread is currently at the front of the 2nd writer queue if
-  // two_write_queues_ is true (This is to simplify the reasoning.)
-  Status SwitchMemtableWithoutCreatingWAL(
-      ColumnFamilyData* cfd, WriteContext* context, uint64_t next_log_num,
-      const std::string& replication_sequence);
-
-  Status SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context);
+  Status SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context,
+                        std::string replication_sequence);
 
   void SelectColumnFamiliesForAtomicFlush(autovector<ColumnFamilyData*>* cfds);
 
@@ -2532,7 +2516,6 @@ inline Status DBImpl::FailIfCfHasTs(
   }
   return Status::OK();
 }
-
 inline Status DBImpl::FailIfTsSizesMismatch(
     const ColumnFamilyHandle* column_family, const Slice& ts) const {
   if (!column_family) {

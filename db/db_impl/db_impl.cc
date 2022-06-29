@@ -53,7 +53,6 @@
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
 #include "db/write_callback.h"
-#include "db/db_impl/replication_codec.h"
 #include "env/unique_id_gen.h"
 #include "file/file_util.h"
 #include "file/filename.h"
@@ -1092,7 +1091,6 @@ Status DeserializeReplicationLogManifestWrite(Slice* src,
 }  // namespace
 
 Status DBImpl::ApplyReplicationLogRecord(ReplicationLogRecord record,
-                                         std::string replication_sequence,
                                          ApplyReplicationLogRecordInfo* info) {
   JobContext job_context(0, true);
   Status s;
@@ -1133,28 +1131,16 @@ Status DBImpl::ApplyReplicationLogRecord(ReplicationLogRecord record,
       }
       case ReplicationLogRecord::kMemtableSwitch: {
         WriteContext write_context;
-        MemTableSwitchRecord mem_switch_record;
-        Slice contents_slice(record.contents);
-        DeserializeMemTableSwitchRecord(&contents_slice, &mem_switch_record);
-
         autovector<ColumnFamilyData*> cfds;
         SelectColumnFamiliesForAtomicFlush(&cfds);
-
-        for (auto cfd: cfds) {
-          if (cfd->mem()->IsEmpty()) {
-            continue;
-          }
-
+        for (const auto cfd : cfds) {
           cfd->Ref();
-          s = SwitchMemtableWithoutCreatingWAL(cfd, &write_context,
-                                               mem_switch_record.next_log_num,
-                                               replication_sequence);
+          s = SwitchMemtable(cfd, &write_context, "");
           cfd->UnrefAndTryDelete();
           if (!s.ok()) {
             break;
           }
         }
-
         break;
       }
       case ReplicationLogRecord::kManifestWrite: {

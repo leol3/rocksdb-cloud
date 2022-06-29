@@ -61,7 +61,6 @@ LIB_SOURCES =                                                   \
   db/db_impl/db_impl_remote_compaction.cc                       \
   db/db_impl/db_impl_secondary.cc                               \
   db/db_impl/db_impl_write.cc                                   \
-  db/db_impl/replication_codec.cc                               \
   db/db_info_dumper.cc                                          \
   db/db_iter.cc                                                 \
   db/dbformat.cc                                                \

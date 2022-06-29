@@ -479,9 +479,8 @@ class StackableDB : public DB {
 
   Status ApplyReplicationLogRecord(
       ReplicationLogRecord record,
-      std::string replication_sequence,
       ApplyReplicationLogRecordInfo* info) override {
-    return db_->ApplyReplicationLogRecord(record, replication_sequence, info);
+    return db_->ApplyReplicationLogRecord(record, info);
   }
   Status GetPersistedReplicationSequence(std::string* out) override {
     return db_->GetPersistedReplicationSequence(out);

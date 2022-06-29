@@ -1684,8 +1684,18 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
 
   DBOptions db_options =
       BuildDBOptions(immutable_db_options_, mutable_db_options_);
-  FileOptions opt_file_options =
-      fs_->OptimizeForLogWrite(file_options_, db_options);
+  ROCKS_LOG_ERROR(immutable_db_options_.info_log, "OptimizeForLogWrite begin\n");
+  if(fs_.get() != nullptr){
+     ROCKS_LOG_ERROR(immutable_db_options_.info_log, "fs_ is not null, name: %s\n", fs_.get()->Name());
+  } else {
+     ROCKS_LOG_ERROR(immutable_db_options_.info_log, "fs_ is null\n");
+  }
+  //FileOptions opt_file_options =
+  //    fs_->OptimizeForLogWrite(file_options_, db_options);
+  FileOptions opt_file_options(file_options_);
+  opt_file_options.bytes_per_sync = db_options.wal_bytes_per_sync;
+  opt_file_options.writable_file_max_buffer_size =
+      db_options.writable_file_max_buffer_size;
   std::string wal_dir = immutable_db_options_.GetWalDir();
   std::string log_fname = LogFileName(wal_dir, log_file_num);
 
@@ -1699,6 +1709,7 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
     io_s = fs_->ReuseWritableFile(log_fname, old_log_fname, opt_file_options,
                                   &lfile, /*dbg=*/nullptr);
   } else {
+	  //sleep(10);
     io_s = NewWritableFile(fs_.get(), log_fname, &lfile, opt_file_options);
   }
 

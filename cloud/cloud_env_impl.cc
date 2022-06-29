@@ -153,7 +153,7 @@ Status CloudEnvImpl::NewSequentialFile(const std::string& logical_fname,
                                        std::unique_ptr<SequentialFile>* result,
                                        const EnvOptions& options) {
   result->reset();
-
+  //sleep(20);
   auto fname = RemapFilename(logical_fname);
   auto file_type = GetFileType(fname);
   bool sstfile = (file_type == RocksDBFileType::kSstFile),
@@ -270,7 +270,9 @@ Status CloudEnvImpl::NewRandomAccessFile(
           uint64_t local_size;
           Status statx = base_env_->GetFileSize(fname, &local_size);
           if (statx.ok()) {
-            FileCacheInsert(fname, local_size);
+            //if(fname.find("ldb") != std::string::npos){
+              FileCacheInsert(fname, local_size);
+            //}
           }
         }
       }
@@ -869,7 +871,10 @@ Status CloudEnvImpl::LoadLocalCloudManifest(
   return s;
 }
 
-std::string RemapFilenameWithCloudManifest(const std::string& logical_path, CloudManifest* cloud_manifest) {
+std::string CloudEnvImpl::RemapFilename(const std::string& logical_path) const {
+  if (UNLIKELY(test_disable_cloud_manifest_)) {
+    return logical_path;
+  }
   auto file_name = basename(logical_path);
   uint64_t fileNumber;
   FileType type;
@@ -886,17 +891,17 @@ std::string RemapFilenameWithCloudManifest(const std::string& logical_path, Clou
   switch (type) {
     case kTableFile:
       // We should not be accessing sst files before CLOUDMANIFEST is loaded
-      assert(cloud_manifest);
-      epoch = cloud_manifest->GetEpoch(fileNumber);
+      assert(cloud_manifest_);
+      epoch = cloud_manifest_->GetEpoch(fileNumber);
       break;
     case kDescriptorFile:
       // We should not be accessing MANIFEST files before CLOUDMANIFEST is
       // loaded
+      assert(cloud_manifest_);
       // Even though logical file might say MANIFEST-000001, we cut the number
       // suffix and store MANIFEST-[epoch] in the cloud and locally.
       file_name = "MANIFEST";
-      assert(cloud_manifest);
-      epoch = cloud_manifest->GetCurrentEpoch();
+      epoch = cloud_manifest_->GetCurrentEpoch();
       break;
     default:
       return logical_path;
@@ -904,13 +909,6 @@ std::string RemapFilenameWithCloudManifest(const std::string& logical_path, Clou
   auto dir = dirname(logical_path);
   return dir + (dir.empty() ? "" : "/") + file_name +
          (epoch.empty() ? "" : ("-" + epoch.ToString()));
-}
-
-std::string CloudEnvImpl::RemapFilename(const std::string& logical_path) const {
-  if (UNLIKELY(test_disable_cloud_manifest_)) {
-    return logical_path;
-  }
-  return RemapFilenameWithCloudManifest(logical_path, cloud_manifest_.get());
 }
 
 Status CloudEnvImpl::DeleteInvisibleFiles(const std::string& dbname) {
@@ -1764,9 +1762,17 @@ Status CloudEnvImpl::FetchCloudManifest(const std::string& local_dbname) {
       return st;
     }
   }
-  Log(InfoLogLevel::INFO_LEVEL, info_log_,
-      "[cloud_env_impl] FetchCloudManifest: No cloud manifest");
+  Log(InfoLogLevel::INFO_LEVEL, info_log_, "[cloud_env_impl] FetchCloudManifest: No cloud manifest");
   return Status::NotFound();
+  /*Log(InfoLogLevel::INFO_LEVEL, info_log_,
+      "[cloud_env_impl] FetchCloudManifest: Creating new"
+      " cloud manifest for %s",
+      local_dbname.c_str());
+
+  // No cloud manifest, create an empty one
+  std::unique_ptr<CloudManifest> manifest;
+  CloudManifest::CreateForEmptyDatabase("", &manifest);
+  return writeCloudManifest(manifest.get(), cloudmanifest);*/
 }
 
 Status CloudEnvImpl::CreateCloudManifest(const std::string& local_dbname) {
@@ -2052,32 +2058,5 @@ Status CloudEnvImpl::CheckValidity() const {
     return Status::OK();
   }
 }
-
-Status CloudEnvImpl::FindAllLiveFiles(const std::string& bucket,
-                                      const std::string& object_path,
-                                      std::vector<std::string>* live_sst_files,
-                                      std::string* manifest_file) {
-  std::unique_ptr<ManifestReader> extractor(
-      new ManifestReader(info_log_, this, bucket));
-  std::set<uint64_t> file_nums;
-  std::unique_ptr<CloudManifest> cloud_manifest;
-  auto st = extractor->GetLiveFilesAndCloudManifest(object_path, &file_nums,
-                                                    &cloud_manifest);
-  if (!st.ok()) {
-    return st;
-  }
-  std::string current_epoch = cloud_manifest->GetCurrentEpoch().ToString();
-  live_sst_files->resize(file_nums.size());
-  *manifest_file = ManifestFileWithEpoch(object_path, current_epoch);
-  size_t idx = 0;
-  for (auto num : file_nums) {
-    std::string logical_path = MakeTableFileName(object_path, num);
-    (*live_sst_files)[idx] =
-        RemapFilenameWithCloudManifest(logical_path, cloud_manifest.get());
-    idx++;
-  }
-  return Status::OK();
-}
-
 }  // namespace ROCKSDB_NAMESPACE
 #endif  // ROCKSDB_LITE

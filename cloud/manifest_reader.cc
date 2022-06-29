@@ -22,13 +22,12 @@ ManifestReader::ManifestReader(std::shared_ptr<Logger> info_log, CloudEnv* cenv,
 ManifestReader::~ManifestReader() {}
 
 //
-// Extract all the live files needed by this MANIFEST file and corresponding
-// cloud_manifest object
+// Extract all the live files needed by this MANIFEST file
 //
-Status ManifestReader::GetLiveFilesAndCloudManifest(
-    const std::string bucket_path, std::set<uint64_t>* list,
-    std::unique_ptr<CloudManifest>* cloud_manifest) {
+Status ManifestReader::GetLiveFiles(const std::string bucket_path,
+                                    std::set<uint64_t>* list) {
   Status s;
+  std::unique_ptr<CloudManifest> cloud_manifest;
   {
     std::unique_ptr<SequentialFile> file;
     auto cloudManifestFile = CloudManifestFile(bucket_path);
@@ -40,7 +39,7 @@ Status ManifestReader::GetLiveFilesAndCloudManifest(
     s = CloudManifest::LoadFromLog(
         std::unique_ptr<SequentialFileReader>(new SequentialFileReader(
             NewLegacySequentialFileWrapper(file), cloudManifestFile)),
-        cloud_manifest);
+        &cloud_manifest);
     if (!s.ok()) {
       return s;
     }
@@ -48,7 +47,7 @@ Status ManifestReader::GetLiveFilesAndCloudManifest(
   std::unique_ptr<SequentialFileReader> file_reader;
   {
     auto manifestFile = ManifestFileWithEpoch(
-        bucket_path, (*cloud_manifest)->GetCurrentEpoch().ToString());
+        bucket_path, cloud_manifest->GetCurrentEpoch().ToString());
     std::unique_ptr<SequentialFile> file;
     s = cenv_->NewSequentialFileCloud(bucket_prefix_, manifestFile, &file,
                                       EnvOptions());

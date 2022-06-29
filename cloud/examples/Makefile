@@ -13,7 +13,7 @@ endif
 all: cloud_durable_example clone_example cloud_dump
 
 cloud_durable_example: librocksdb cloud_durable_example.cc
-	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS)
+	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS) -Wno-non-virtual-dtor  -Wno-overloaded-virtual -Wno-error=implicit-function-declaration -I/root/install/usr/local/include -L/root/install/usr/local/lib -laws-cpp-sdk-core -laws-cpp-sdk-s3 -laws-cpp-sdk-kinesis  -laws-cpp-sdk-transfer -DUSE_AWS
 
 clone_example: librocksdb clone_example.cc
 	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS)
