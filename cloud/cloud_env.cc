@@ -54,7 +54,7 @@ BucketOptions::BucketOptions() {
   if (!CloudEnvOptions::GetNameFromEnvironment(
           "ROCKSDB_CLOUD_TEST_BUCKET_PREFIX", "ROCKSDB_CLOUD_BUCKET_PREFIX",
           &prefix_)) {
-    prefix_ = "rockset.";
+    prefix_ = "";
   }
   if (CloudEnvOptions::GetNameFromEnvironment("ROCKSDB_CLOUD_TEST_BUCKET_NAME",
                                               "ROCKSDB_CLOUD_BUCKET_NAME",

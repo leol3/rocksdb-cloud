@@ -91,7 +91,7 @@ void CloudEnvImpl::FileCacheErase(const std::string& fname) {
 //
 void CloudEnvImpl::FileCacheDeleter(const std::string& fname) {
   Status st = base_env_->DeleteFile(fname);
-  log(InfoLogLevel::INFO_LEVEL, fname, "purged");
+  //log(InfoLogLevel::INFO_LEVEL, fname, "purged");
 }
 
 //
@@ -140,7 +140,7 @@ void CloudEnvImpl::FileCachePurge() {
       count++;
     }
   }
-  log(InfoLogLevel::INFO_LEVEL, "ENV-DELETE", "purged");
+  //log(InfoLogLevel::INFO_LEVEL, "ENV-DELETE", "purged");
 }
 
 void CloudEnvImpl::log(InfoLogLevel level, const std::string& fname,

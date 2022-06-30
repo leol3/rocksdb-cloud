@@ -621,6 +621,7 @@ class Transaction {
   std::atomic<TransactionState> txn_state_;
 
   uint64_t id_ = 0;
+ public:
   virtual void SetId(uint64_t id) {
     assert(id_ == 0);
     id_ = id;

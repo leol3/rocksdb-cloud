@@ -1336,13 +1336,14 @@ class DBImpl : public DB {
   // batch_cnt is expected to be non-zero in seq_per_batch mode and
   // indicates the number of sub-patches. A sub-patch is a subset of the write
   // batch that does not have duplicate keys.
+ public:
   Status WriteImpl(const WriteOptions& options, WriteBatch* updates,
                    WriteCallback* callback = nullptr,
                    uint64_t* log_used = nullptr, uint64_t log_ref = 0,
                    bool disable_memtable = false, uint64_t* seq_used = nullptr,
                    size_t batch_cnt = 0,
                    PreReleaseCallback* pre_release_callback = nullptr);
-
+ protected:
   Status PipelinedWriteImpl(const WriteOptions& options, WriteBatch* updates,
                             WriteCallback* callback = nullptr,
                             uint64_t* log_used = nullptr, uint64_t log_ref = 0,
@@ -1426,6 +1427,7 @@ class DBImpl : public DB {
   friend class ErrorHandler;
   friend class InternalStats;
   friend class PessimisticTransaction;
+  friend class CloudTransaction;
   friend class TransactionBaseImpl;
   friend class WriteCommittedTxn;
   friend class WritePreparedTxn;
@@ -2514,7 +2516,6 @@ inline Status DBImpl::FailIfCfHasTs(
   }
   return Status::OK();
 }
-
 inline Status DBImpl::FailIfTsSizesMismatch(
     const ColumnFamilyHandle* column_family, const Slice& ts) const {
   if (!column_family) {

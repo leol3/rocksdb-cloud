@@ -461,8 +461,12 @@ Status S3StorageProvider::PrepareOptions(const ConfigOptions& options) {
     }
   }
   Aws::Client::ClientConfiguration config;
+  config.endpointOverride = "objectcfs.jd.local";
+  config.region = "spark";
+  config.scheme = Aws::Http::Scheme::HTTP;
+  config.verifySSL = false;
   Status status = AwsCloudOptions::GetClientConfiguration(
-      cenv, cloud_opts.src_bucket.GetRegion(), &config);
+		  cenv, cloud_opts.src_bucket.GetRegion(), &config);
   if (status.ok()) {
     std::shared_ptr<Aws::Auth::AWSCredentialsProvider> creds;
     status = cloud_opts.credentials.GetCredentialsProvider(&creds);
@@ -709,7 +713,11 @@ Status S3StorageProvider::PutCloudObjectMetadata(
   request.SetBucket(ToAwsString(bucket_name));
   request.SetKey(ToAwsString(object_path));
   request.SetMetadata(aws_metadata);
+  auto input_data = Aws::MakeShared<Aws::FStream>("PutObjectInputStream", object_path, std::ios_base::out | std::ios_base::app);
+  request.SetBody(input_data);
   SetEncryptionParameters(env_->GetCloudEnvOptions(), request);
+  Log(InfoLogLevel::ERROR_LEVEL, env_->GetLogger(),"PutCloudObjectMetadata bucket_name: %s, object_path: %s, dir name: %s", 
+		  bucket_name.c_str(), object_path.c_str(), metadata.at("dirname").c_str());
 
   auto outcome = s3client_->PutCloudObject(request);
   bool isSuccess = outcome.IsSuccess();
@@ -889,6 +897,19 @@ class IOStreamWithOwnedBuf : public std::iostream {
 
 }  // namespace
 
+void string_replace_2(std::string&s1,const std::string&s2,const std::string&s3)
+{
+        std::string::size_type pos=0;
+        std::string::size_type a=s2.size();
+        std::string::size_type b=s3.size();
+        while((pos=s1.find(s2,pos))!=std::string::npos)
+        {
+                s1.erase(pos,a);
+                s1.insert(pos,s3);
+                pos+=b;
+        }
+}
+
 Status S3StorageProvider::DoGetCloudObject(const std::string& bucket_name,
                                            const std::string& object_path,
                                            const std::string& destination,
@@ -950,6 +971,9 @@ Status S3StorageProvider::DoGetCloudObject(const std::string& bucket_name,
                 std::unique_ptr<WritableFileWriter>(new WritableFileWriter(
                         std::move(file), destination, foptions)))));
       };
+
+      //std::string my_path = object_path;
+      //string_replace_2(my_path,"ldb","sst");
 
       Aws::S3::Model::GetObjectRequest request;
       request.SetBucket(ToAwsString(bucket_name));
